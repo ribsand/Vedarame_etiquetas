@@ -15,7 +15,7 @@ from tkinter import messagebox, Toplevel, ttk
 #  VERSÃO E ATUALIZAÇÃO
 # ─────────────────────────────────────────────
 URL_RAW_GITHUB = "https://raw.githubusercontent.com/ribsand/Vedarame_etiquetas/refs/heads/main/etiquetas_mac.py"
-VERSAO_LOCAL = "1.0.1"
+VERSAO_LOCAL = "1.0"
 
 def _parse_versao(v: str):
     """Converte string de versão em tuplo de inteiros para comparação segura."""
@@ -48,34 +48,21 @@ def verificar_atualizacao():
         print(f"[INFO] Verificação de atualização falhou: {e}")
 
 def executar_update(novo_codigo: str):
-    """Substitui o ficheiro atual e reinicia a aplicação de forma segura."""
+    """Versão para App compilada: Guarda o novo script nos Documentos ou avisa o user."""
     try:
-        caminho_atual = os.path.abspath(sys.argv[0])
+        # Se for um .app, o sys.argv[0] aponta para dentro do pacote (impossível de escrever)
+        # Vamos sugerir guardar o código novo numa pasta de utilizador
+        pasta_destinho = Path.home() / "Downloads" / "etiquetas_mac_ATUALIZADO.py"
         
-        # 1. Criar um backup do ficheiro atual por segurança
-        caminho_backup = caminho_atual + ".bak"
-        if os.path.exists(caminho_atual):
-            os.replace(caminho_atual, caminho_backup)
-
-        # 2. Gravar o novo código
-        with open(caminho_atual, "w", encoding="utf-8") as f:
+        with open(pasta_destinho, "w", encoding="utf-8") as f:
             f.write(novo_codigo)
-        
-        # 3. No macOS/Linux, garantir que o ficheiro é executável
-        if sys.platform != "win32":
-            os.chmod(caminho_atual, 0o755)
-
-        messagebox.showinfo("Sucesso", "Aplicação atualizada! A reiniciar...")
-        
-        # 4. Reiniciar usando subprocess (mais limpo que execv)
-        subprocess.Popen([sys.executable, caminho_atual] + sys.argv[1:])
-        os._exit(0) 
-
+            
+        messagebox.showinfo("Atualização", 
+            f"Como esta é uma App protegida, o novo código foi baixado para:\n{pasta_destinho}\n\n"
+            "Por favor, use esse ficheiro para gerar a nova versão da App.")
+            
     except Exception as e:
-        # Se falhar, tenta restaurar o backup
-        if 'caminho_backup' in locals() and os.path.exists(caminho_backup):
-            os.replace(caminho_backup, caminho_atual)
-        messagebox.showerror("Erro", f"Falha ao atualizar: {e}")
+        messagebox.showerror("Erro", f"Não foi possível salvar a atualização: {e}")
 
 
 # ─────────────────────────────────────────────
