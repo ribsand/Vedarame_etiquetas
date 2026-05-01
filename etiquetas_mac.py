@@ -48,15 +48,34 @@ def verificar_atualizacao():
         print(f"[INFO] Verificação de atualização falhou: {e}")
 
 def executar_update(novo_codigo: str):
-    """Substitui o ficheiro atual e reinicia a aplicação."""
+    """Substitui o ficheiro atual e reinicia a aplicação de forma segura."""
     try:
         caminho_atual = os.path.abspath(sys.argv[0])
+        
+        # 1. Criar um backup do ficheiro atual por segurança
+        caminho_backup = caminho_atual + ".bak"
+        if os.path.exists(caminho_atual):
+            os.replace(caminho_atual, caminho_backup)
+
+        # 2. Gravar o novo código
         with open(caminho_atual, "w", encoding="utf-8") as f:
             f.write(novo_codigo)
+        
+        # 3. No macOS/Linux, garantir que o ficheiro é executável
+        if sys.platform != "win32":
+            os.chmod(caminho_atual, 0o755)
+
         messagebox.showinfo("Sucesso", "Aplicação atualizada! A reiniciar...")
-        os.execv(sys.executable, [sys.executable] + sys.argv)
+        
+        # 4. Reiniciar usando subprocess (mais limpo que execv)
+        subprocess.Popen([sys.executable, caminho_atual] + sys.argv[1:])
+        os._exit(0) 
+
     except Exception as e:
-        messagebox.showerror("Erro", f"Falha ao gravar ficheiro: {e}")
+        # Se falhar, tenta restaurar o backup
+        if 'caminho_backup' in locals() and os.path.exists(caminho_backup):
+            os.replace(caminho_backup, caminho_atual)
+        messagebox.showerror("Erro", f"Falha ao atualizar: {e}")
 
 
 # ─────────────────────────────────────────────
