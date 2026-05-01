@@ -15,7 +15,7 @@ from tkinter import messagebox, Toplevel, ttk
 #  VERSÃO E ATUALIZAÇÃO
 # ─────────────────────────────────────────────
 URL_RAW_GITHUB = "https://raw.githubusercontent.com/ribsand/Vedarame_etiquetas/refs/heads/main/etiquetas_mac.py"
-VERSAO_LOCAL = "1.0.1"
+VERSAO_LOCAL = "0.9"
 
 def _parse_versao(v: str):
     """Converte string de versão em tuplo de inteiros para comparação segura."""
@@ -48,47 +48,46 @@ def verificar_atualizacao():
         print(f"[INFO] Verificação de atualização falhou: {e}")
 
 def executar_update(novo_codigo: str):
-    """Substitui o ficheiro e reinicia. Adaptado para Script e App macOS."""
+    """Atualiza a aplicação, fecha a atual e reabre a nova automaticamente."""
     try:
-        # 1. Identificar o caminho real
+        # 1. Determinar se estamos a correr como .app ou .py
         if hasattr(sys, '_MEIPASS'):
-            # Se for App compilada, o sys.argv[0] é o executável
             caminho_atual = os.path.abspath(sys.argv[0])
+            # Se for App, o executável está dentro de Contents/MacOS/Nome
+            # Mas queremos substituir o ficheiro .py original se possível ou o binário
         else:
             caminho_atual = os.path.abspath(__file__)
 
-        caminho_backup = caminho_atual + ".bak"
-        
-        # 2. Tentar substituir (pode pedir permissão no macOS)
-        try:
-            if os.path.exists(caminho_atual):
-                os.replace(caminho_atual, caminho_backup)
-            
-            with open(caminho_atual, "w", encoding="utf-8") as f:
-                f.write(novo_codigo)
-            
-            if sys.platform != "win32":
-                os.chmod(caminho_atual, 0o755)
-        except PermissionError:
-            messagebox.showerror("Erro de Permissão", 
-                "O macOS bloqueou a gravação. Arraste a App para a pasta 'Aplicações' e tente novamente.")
-            return
+        pasta_app = os.path.dirname(caminho_atual)
+        nome_arquivo = os.path.basename(caminho_atual)
+        caminho_temp = os.path.join(pasta_app, f"novo_{nome_arquivo}")
 
-        messagebox.showinfo("Sucesso", "Aplicação atualizada! A reiniciar...")
-        
-        # 3. Reiniciar
-        # Usamos o comando 'open' do macOS para garantir que a App reabre corretamente
-        if sys.platform == "darwin":
-            subprocess.Popen(["open", caminho_atual])
-        else:
-            subprocess.Popen([sys.executable, caminho_atual] + sys.argv[1:])
-            
+        # 2. Gravar o novo código num ficheiro temporário
+        with open(caminho_temp, "w", encoding="utf-8") as f:
+            f.write(novo_codigo)
+        os.chmod(caminho_temp, 0o755)
+
+        # 3. Criar um script "Lançador" que corre em background
+        # Este script espera a app atual fechar, substitui o ficheiro e abre a nova
+        script_updater = os.path.join(pasta_app, "update_helper.sh")
+        with open(script_updater, "w") as f:
+            f.write(f"""#!/bin/bash
+sleep 1
+mv -f "{caminho_temp}" "{caminho_atual}"
+chmod +x "{caminho_atual}"
+open "{caminho_atual}"
+rm "$0"
+""")
+        os.chmod(script_updater, 0o755)
+
+        messagebox.showinfo("Atualização", "Nova versão instalada. A reiniciar...")
+
+        # 4. Executar o updater e fechar a app atual imediatamente
+        subprocess.Popen(["/bin/bash", script_updater], start_new_session=True)
         os._exit(0)
 
     except Exception as e:
-        if 'caminho_backup' in locals() and os.path.exists(caminho_backup):
-            os.replace(caminho_backup, caminho_atual)
-        messagebox.showerror("Erro", f"Falha ao atualizar: {e}")
+        messagebox.showerror("Erro de Atualização", f"Falha ao automatizar: {e}")
 
 # ─────────────────────────────────────────────
 #  AMBIENTE
