@@ -12,83 +12,83 @@ import tkinter as tk
 from tkinter import messagebox, Toplevel, ttk
 
 # ─────────────────────────────────────────────
-#  VERSÃO E ATUALIZAÇÃO
+#  VERSÃO E ATUALIZAÇÃO (SEGURO - MODO TESTE)
 # ─────────────────────────────────────────────
-URL_RAW_GITHUB = "https://raw.githubusercontent.com/ribsand/Vedarame_etiquetas/refs/heads/main/etiquetas_mac.py"
-VERSAO_LOCAL = "1.0.1"
+import hashlib
+import tempfile
+
+URL_RAW_GITHUB = "https://raw.githubusercontent.com/ribsand/Vedarame_etiquetas/main/etiquetas_mac.py"
+VERSAO_LOCAL = "0.9"
 
 def _parse_versao(v: str):
-    """Converte string de versão em tuplo de inteiros para comparação segura."""
     try:
         return tuple(int(x) for x in v.strip().split("."))
-    except ValueError:
+    except:
         return (0,)
 
-def verificar_atualizacao():
-    """Verifica se existe uma versão mais recente no GitHub."""
-    ctx = ssl._create_unverified_context()
-    try:
-        req = urllib.request.Request(URL_RAW_GITHUB, headers={"User-Agent": "Mozilla/5.0"})
-        with urllib.request.urlopen(req, timeout=10, context=ctx) as response:
-            conteudo_novo = response.read().decode("utf-8")
-            for linha in conteudo_novo.split("\n"):
-                if "VERSAO_LOCAL =" in linha:
-                    partes = linha.split('"')
-                    if len(partes) < 2:
-                        return
-                    versao_remota = partes[1]
-                    if _parse_versao(versao_remota) > _parse_versao(VERSAO_LOCAL):
-                        if messagebox.askyesno(
-                            "Atualização",
-                            f"Nova versão disponível: {versao_remota}\nActualizar agora?"
-                        ):
-                            executar_update(conteudo_novo)
-                    return
-    except Exception as e:
-        print(f"[INFO] Verificação de atualização falhou: {e}")
+def _extrair_versao_codigo(codigo: str):
+    for linha in codigo.split("\n"):
+        if "VERSAO_LOCAL =" in linha:
+            try:
+                return linha.split('"')[1]
+            except:
+                return None
+    return None
 
-def executar_update(novo_codigo: str):
-    """Substitui o ficheiro e reinicia. Adaptado para Script e App macOS."""
+def verificar_atualizacao_segura():
     try:
-        # 1. Identificar o caminho real
-        if hasattr(sys, '_MEIPASS'):
-            # Se for App compilada, o sys.argv[0] é o executável
-            caminho_atual = os.path.abspath(sys.argv[0])
-        else:
-            caminho_atual = os.path.abspath(__file__)
+        req = urllib.request.Request(
+            URL_RAW_GITHUB,
+            headers={"User-Agent": "Mozilla/5.0"}
+        )
 
-        caminho_backup = caminho_atual + ".bak"
-        
-        # 2. Tentar substituir (pode pedir permissão no macOS)
-        try:
-            if os.path.exists(caminho_atual):
-                os.replace(caminho_atual, caminho_backup)
-            
-            with open(caminho_atual, "w", encoding="utf-8") as f:
-                f.write(novo_codigo)
-            
-            if sys.platform != "win32":
-                os.chmod(caminho_atual, 0o755)
-        except PermissionError:
-            messagebox.showerror("Erro de Permissão", 
-                "O macOS bloqueou a gravação. Arraste a App para a pasta 'Aplicações' e tente novamente.")
+        # SSL seguro (sem bypass!)
+        with urllib.request.urlopen(req, timeout=10) as response:
+            novo_codigo = response.read().decode("utf-8")
+
+        versao_remota = _extrair_versao_codigo(novo_codigo)
+
+        if not versao_remota:
             return
 
-        messagebox.showinfo("Sucesso", "Aplicação atualizada! A reiniciar...")
-        
-        # 3. Reiniciar
-        # Usamos o comando 'open' do macOS para garantir que a App reabre corretamente
-        if sys.platform == "darwin":
-            subprocess.Popen(["open", caminho_atual])
-        else:
-            subprocess.Popen([sys.executable, caminho_atual] + sys.argv[1:])
-            
-        os._exit(0)
+        if _parse_versao(versao_remota) > _parse_versao(VERSAO_LOCAL):
+
+            if messagebox.askyesno(
+                "Atualização disponível",
+                f"Nova versão encontrada: {versao_remota}\n\n"
+                "Queres descarregar para testar?"
+            ):
+                guardar_update_temp(novo_codigo, versao_remota)
 
     except Exception as e:
-        if 'caminho_backup' in locals() and os.path.exists(caminho_backup):
-            os.replace(caminho_backup, caminho_atual)
-        messagebox.showerror("Erro", f"Falha ao atualizar: {e}")
+        print(f"[INFO] Falha ao verificar atualização: {e}")
+
+
+def guardar_update_temp(codigo: str, versao: str):
+    try:
+        temp_dir = tempfile.gettempdir()
+        caminho_novo = os.path.join(temp_dir, f"vedarame_update_{versao}.py")
+
+        with open(caminho_novo, "w", encoding="utf-8") as f:
+            f.write(codigo)
+
+        hash_codigo = hashlib.sha256(codigo.encode()).hexdigest()[:12]
+
+        messagebox.showinfo(
+            "Update descarregado",
+            f"Ficheiro guardado em:\n{caminho_novo}\n\n"
+            f"Hash: {hash_codigo}\n\n"
+            "Abre manualmente para testar."
+        )
+
+        # abrir automaticamente no macOS
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", caminho_novo])
+        else:
+            subprocess.Popen([sys.executable, caminho_novo])
+
+    except Exception as e:
+        messagebox.showerror("Erro", f"Falha ao guardar update: {e}")
 
 # ─────────────────────────────────────────────
 #  AMBIENTE
@@ -424,7 +424,6 @@ class AppVedarame:
         self.app.minsize(480, 700)
         self.app.after(100, lambda: self.app.geometry("520x900"))
         self.app.configure(bg=COR["card"])
-        self.app.after(1500, verificar_atualizacao)
 
         self._construir_ui()
         self.app.mainloop()
