@@ -15,7 +15,7 @@ from tkinter import messagebox, Toplevel, ttk
 #  VERSÃO E ATUALIZAÇÃO
 # ─────────────────────────────────────────────
 URL_RAW_GITHUB = "https://raw.githubusercontent.com/ribsand/Vedarame_etiquetas/refs/heads/main/etiquetas_mac.py"
-VERSAO_LOCAL = "1.0"
+VERSAO_LOCAL = "1.0.1"
 
 def _parse_versao(v: str):
     """Converte string de versão em tuplo de inteiros para comparação segura."""
@@ -48,22 +48,47 @@ def verificar_atualizacao():
         print(f"[INFO] Verificação de atualização falhou: {e}")
 
 def executar_update(novo_codigo: str):
-    """Versão para App compilada: Guarda o novo script nos Documentos ou avisa o user."""
+    """Substitui o ficheiro e reinicia. Adaptado para Script e App macOS."""
     try:
-        # Se for um .app, o sys.argv[0] aponta para dentro do pacote (impossível de escrever)
-        # Vamos sugerir guardar o código novo numa pasta de utilizador
-        pasta_destinho = Path.home() / "Downloads" / "etiquetas_mac_ATUALIZADO.py"
-        
-        with open(pasta_destinho, "w", encoding="utf-8") as f:
-            f.write(novo_codigo)
-            
-        messagebox.showinfo("Atualização", 
-            f"Como esta é uma App protegida, o novo código foi baixado para:\n{pasta_destinho}\n\n"
-            "Por favor, use esse ficheiro para gerar a nova versão da App.")
-            
-    except Exception as e:
-        messagebox.showerror("Erro", f"Não foi possível salvar a atualização: {e}")
+        # 1. Identificar o caminho real
+        if hasattr(sys, '_MEIPASS'):
+            # Se for App compilada, o sys.argv[0] é o executável
+            caminho_atual = os.path.abspath(sys.argv[0])
+        else:
+            caminho_atual = os.path.abspath(__file__)
 
+        caminho_backup = caminho_atual + ".bak"
+        
+        # 2. Tentar substituir (pode pedir permissão no macOS)
+        try:
+            if os.path.exists(caminho_atual):
+                os.replace(caminho_atual, caminho_backup)
+            
+            with open(caminho_atual, "w", encoding="utf-8") as f:
+                f.write(novo_codigo)
+            
+            if sys.platform != "win32":
+                os.chmod(caminho_atual, 0o755)
+        except PermissionError:
+            messagebox.showerror("Erro de Permissão", 
+                "O macOS bloqueou a gravação. Arraste a App para a pasta 'Aplicações' e tente novamente.")
+            return
+
+        messagebox.showinfo("Sucesso", "Aplicação atualizada! A reiniciar...")
+        
+        # 3. Reiniciar
+        # Usamos o comando 'open' do macOS para garantir que a App reabre corretamente
+        if sys.platform == "darwin":
+            subprocess.Popen(["open", caminho_atual])
+        else:
+            subprocess.Popen([sys.executable, caminho_atual] + sys.argv[1:])
+            
+        os._exit(0)
+
+    except Exception as e:
+        if 'caminho_backup' in locals() and os.path.exists(caminho_backup):
+            os.replace(caminho_backup, caminho_atual)
+        messagebox.showerror("Erro", f"Falha ao atualizar: {e}")
 
 # ─────────────────────────────────────────────
 #  AMBIENTE
